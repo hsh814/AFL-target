@@ -3169,49 +3169,44 @@ static u8 save_if_interesting(char** argv, void* mem, u32 len, u8 fault) {
 
   if (fault == crash_mode) {
 
-    /* Keep only if there are new bits in the map, add to queue for
-       future fuzzing, etc. */
-
-    if (!(hnb = has_new_bits(virgin_bits))) {
-      if (crash_mode) total_crashes++;
-      return 0;
-    }    
+    hnb = has_new_bits(virgin_bits);
+    if (hnb) {
 
 #ifndef SIMPLE_FILES
 
-    fn = alloc_printf("%s/queue/id:%06u,%s", out_dir, queued_paths,
-                      describe_op(hnb));
+      fn = alloc_printf("%s/queue/id:%06u,%s", out_dir, queued_paths,
+                        describe_op(hnb));
 
 #else
 
-    fn = alloc_printf("%s/queue/id_%06u", out_dir, queued_paths);
+      fn = alloc_printf("%s/queue/id_%06u", out_dir, queued_paths);
 
 #endif /* ^!SIMPLE_FILES */
 
-    add_to_queue(fn, len, 0);
+      add_to_queue(fn, len, 0);
 
-    if (hnb == 2) {
-      queue_top->has_new_cov = 1;
-      queued_with_cov++;
+      if (hnb == 2) {
+        queue_top->has_new_cov = 1;
+        queued_with_cov++;
+      }
+
+      queue_top->exec_cksum = hash32(trace_bits, MAP_SIZE, HASH_CONST);
+
+      /* Try to calibrate inline; this also calls update_bitmap_score() when
+        successful. */
+
+      res = calibrate_case(argv, queue_top, mem, queue_cycle - 1, 0);
+
+      if (res == FAULT_ERROR)
+        FATAL("Unable to execute target application");
+
+      fd = open(fn, O_WRONLY | O_CREAT | O_EXCL, 0600);
+      if (fd < 0) PFATAL("Unable to create '%s'", fn);
+      ck_write(fd, mem, len, fn);
+      close(fd);
+
+      keeping = 1;
     }
-
-    queue_top->exec_cksum = hash32(trace_bits, MAP_SIZE, HASH_CONST);
-
-    /* Try to calibrate inline; this also calls update_bitmap_score() when
-       successful. */
-
-    res = calibrate_case(argv, queue_top, mem, queue_cycle - 1, 0);
-
-    if (res == FAULT_ERROR)
-      FATAL("Unable to execute target application");
-
-    fd = open(fn, O_WRONLY | O_CREAT | O_EXCL, 0600);
-    if (fd < 0) PFATAL("Unable to create '%s'", fn);
-    ck_write(fd, mem, len, fn);
-    close(fd);
-
-    keeping = 1;
-
   }
 
   switch (fault) {
@@ -3299,7 +3294,7 @@ keep_as_crash:
         simplify_trace((u32*)trace_bits);
 #endif /* ^WORD_SIZE_64 */
 
-        if (!has_new_bits(virgin_crash)) return keeping;
+        // if (!has_new_bits(virgin_crash)) return keeping;
 
       }
 
@@ -3308,19 +3303,20 @@ keep_as_crash:
 #ifndef SIMPLE_FILES
 
       fn = alloc_printf("%s/crashes/id:%06llu,sig:%02u,%s", out_dir,
-                        unique_crashes, kill_signal, describe_op(0));
+                        total_crashes, kill_signal, describe_op(0));
 
 #else
 
-      fn = alloc_printf("%s/crashes/id_%06llu_%02u", out_dir, unique_crashes,
+      fn = alloc_printf("%s/crashes/id_%06llu_%02u", out_dir, total_crashes,
                         kill_signal);
 
 #endif /* ^!SIMPLE_FILES */
+      if (has_new_bits(virgin_crash)) {
+        unique_crashes++;
 
-      unique_crashes++;
-
-      last_crash_time = get_cur_time();
-      last_crash_execs = total_execs;
+        last_crash_time = get_cur_time();
+        last_crash_execs = total_execs;
+      }
 
       break;
 
