@@ -158,6 +158,9 @@ static u8  var_bytes[MAP_SIZE];       /* Bytes that appear to be variable */
 
 static s32 shm_id;                    /* ID of the SHM region             */
 
+static s32 marker_shm_id;             /* ID of the marker SHM region      */
+EXP_ST u8* marker_base;               /* Base addr of the marker region   */
+
 static volatile u8 stop_soon,         /* Ctrl-C pressed?                  */
                    clear_screen = 1,  /* Window resized?                  */
                    child_timed_out;   /* Traced process timed out?        */
@@ -197,7 +200,10 @@ EXP_ST u64 total_crashes,             /* Total number of crashes          */
            bytes_trim_in,             /* Bytes coming into the trimmer    */
            bytes_trim_out,            /* Bytes coming outa the trimmer    */
            blocks_eff_total,          /* Blocks subject to effector maps  */
-           blocks_eff_select;         /* Blocks selected as fuzzable      */
+           blocks_eff_select,         /* Blocks selected as fuzzable      */
+           kept_crashes,              /* Crashes that have been kept      */
+           kept_normals;              /* Normal execs that have been kept */
+
 
 static u32 subseq_tmouts;             /* Number of timeouts in a row      */
 
@@ -1230,6 +1236,7 @@ static inline void classify_counts(u32* mem) {
 static void remove_shm(void) {
 
   shmctl(shm_id, IPC_RMID, NULL);
+  shmctl(marker_shm_id, IPC_RMID, NULL);
 
 }
 
@@ -1371,6 +1378,7 @@ static void cull_queue(void) {
 EXP_ST void setup_shm(void) {
 
   u8* shm_str;
+  u8* marker_shm_str;
 
   if (!in_bitmap) memset(virgin_bits, 255, MAP_SIZE);
 
@@ -1378,12 +1386,14 @@ EXP_ST void setup_shm(void) {
   memset(virgin_crash, 255, MAP_SIZE);
 
   shm_id = shmget(IPC_PRIVATE, MAP_SIZE, IPC_CREAT | IPC_EXCL | 0600);
+  marker_shm_id = shmget(IPC_PRIVATE, 4096, IPC_CREAT | IPC_EXCL | 0600);
 
-  if (shm_id < 0) PFATAL("shmget() failed");
+  if (shm_id < 0 || marker_shm_id < 0) PFATAL("shmget() failed");
 
   atexit(remove_shm);
 
   shm_str = alloc_printf("%d", shm_id);
+  marker_shm_str = alloc_printf("%d", marker_shm_id);
 
   /* If somebody is asking us to fuzz instrumented binaries in dumb mode,
      we don't want them to detect instrumentation, since we won't be sending
@@ -1391,13 +1401,17 @@ EXP_ST void setup_shm(void) {
      later on, perhaps? */
 
   if (!dumb_mode) setenv(SHM_ENV_VAR, shm_str, 1);
+  if (!dumb_mode) setenv(MARKER_SHM_ENV_VAR, marker_shm_str, 1);
 
   ck_free(shm_str);
+  ck_free(marker_shm_str);
 
   trace_bits = shmat(shm_id, NULL, 0);
   
   if (trace_bits == (void *)-1) PFATAL("shmat() failed");
 
+  marker_base = shmat(marker_shm_id, NULL, 0);
+  memset(marker_base, 0, 1);
 }
 
 
@@ -3166,6 +3180,7 @@ static u8 save_if_interesting(char** argv, void* mem, u32 len, u8 fault) {
   u8  hnb;
   s32 fd;
   u8  keeping = 0, res;
+  u8  reach_two_locs = 0;
 
   if (fault == crash_mode) {
 
@@ -3209,6 +3224,12 @@ static u8 save_if_interesting(char** argv, void* mem, u32 len, u8 fault) {
     }
   }
 
+  // check if fix location and crash location were reached
+  u8 marker_content = *marker_base;
+  reach_two_locs = marker_content >> 7;
+  reach_two_locs &= ((marker_content << 1) >> 7);
+  memset(marker_base, 0, 1);
+  
   switch (fault) {
 
     case FAULT_TMOUT:
@@ -3298,16 +3319,19 @@ keep_as_crash:
 
       }
 
+      if (!reach_two_locs) return keeping;
+      kept_crashes++;
+
       if (!unique_crashes) write_crash_readme();
 
 #ifndef SIMPLE_FILES
 
       fn = alloc_printf("%s/crashes/id:%06llu,sig:%02u,%s", out_dir,
-                        total_crashes, kill_signal, describe_op(0));
+                        kept_crashes, kill_signal, describe_op(0));
 
 #else
 
-      fn = alloc_printf("%s/crashes/id_%06llu_%02u", out_dir, total_crashes,
+      fn = alloc_printf("%s/crashes/id_%06llu_%02u", out_dir, kept_crashes,
                         kill_signal);
 
 #endif /* ^!SIMPLE_FILES */
@@ -3318,6 +3342,12 @@ keep_as_crash:
         last_crash_execs = total_execs;
       }
 
+      break;
+    
+    case FAULT_NONE:
+      if (!reach_two_locs) return keeping;
+      kept_normals++;
+      fn = alloc_printf("%s/normals/id:%06llu", out_dir, kept_normals);
       break;
 
     case FAULT_ERROR: FATAL("Unable to execute target application");
@@ -4203,19 +4233,19 @@ static void show_stats(void) {
 
   SAYF("  new edges on : " cRST "%-22s " bSTG bV "\n", tmp);
 
-  sprintf(tmp, "%s (%s%s unique)", DI(total_crashes), DI(unique_crashes),
-          (unique_crashes >= KEEP_UNIQUE_CRASH) ? "+" : "");
+  sprintf(tmp, "%s (%s%s normal)", DI(kept_crashes + kept_normals), 
+          DI(kept_normals), (unique_crashes >= KEEP_UNIQUE_CRASH) ? "+" : "");
 
   if (crash_mode) {
 
     SAYF(bV bSTOP " total execs : " cRST "%-21s " bSTG bV bSTOP
-         "   new crashes : %s%-22s " bSTG bV "\n", DI(total_execs),
+         "   saved total : %s%-22s " bSTG bV "\n", DI(total_execs),
          unique_crashes ? cLRD : cRST, tmp);
 
   } else {
 
     SAYF(bV bSTOP " total execs : " cRST "%-21s " bSTG bV bSTOP
-         " total crashes : %s%-22s " bSTG bV "\n", DI(total_execs),
+         "   saved total : %s%-22s " bSTG bV "\n", DI(total_execs),
          unique_crashes ? cLRD : cRST, tmp);
 
   }
@@ -7233,6 +7263,13 @@ EXP_ST void setup_dirs_fds(void) {
   /* All recorded crashes. */
 
   tmp = alloc_printf("%s/crashes", out_dir);
+  if (mkdir(tmp, 0700)) PFATAL("Unable to create '%s'", tmp);
+  ck_free(tmp);
+
+
+  /* All recorded normales. */
+
+  tmp = alloc_printf("%s/normals", out_dir);
   if (mkdir(tmp, 0700)) PFATAL("Unable to create '%s'", tmp);
   ck_free(tmp);
 
