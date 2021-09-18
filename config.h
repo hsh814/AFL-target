@@ -86,6 +86,11 @@
 #define KEEP_UNIQUE_HANG    500
 #define KEEP_UNIQUE_CRASH   5000
 
+/* Desired number of pass and fail test to save: */
+
+#define PASS_WANTED         10000
+#define FAIL_WANTED         10000
+
 /* Baseline number of random tweaks during a single 'havoc' stage: */
 
 #define HAVOC_CYCLES        256

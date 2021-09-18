@@ -3188,9 +3188,10 @@ static u8 save_if_interesting(char** argv, void* mem, u32 len, u8 fault) {
   reach_two_locs &= ((marker_content << 1) >> 7);
   memset(marker_base, 0, 1);
 
+  hnb = has_new_bits(virgin_bits);
+
   if (fault == crash_mode) {
 
-    hnb = has_new_bits(virgin_bits);
     if (hnb) {
 
 #ifndef SIMPLE_FILES
@@ -3322,8 +3323,10 @@ keep_as_crash:
       if (!reach_two_locs) return keeping;
 
       hnb = has_new_bits(virgin_crash);
-
-      // if no new bits, throw it away 98% of the time
+      
+      // if no new bits, and have kept enough crashes, do not save this one
+      if (!hnb && kept_crashes >= FAIL_WANTED) return keeping;
+      // if no new bits, and threshold not reached, throw it away 98% of the time
       if (!hnb && UR(100) > 1) return keeping;
 
       kept_crashes++;
@@ -3351,7 +3354,10 @@ keep_as_crash:
       break;
     
     case FAULT_NONE:
+      // only save passes that reach those two locations
       if (!reach_two_locs) return keeping;
+      // if no new bits, and have already saved enough passes, throw this away
+      if (!hnb && kept_normals >= PASS_WANTED) return keeping;
       kept_normals++;
       fn = alloc_printf("%s/normals/id:%06llu", out_dir, kept_normals);
       break;
