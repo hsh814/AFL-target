@@ -3182,6 +3182,12 @@ static u8 save_if_interesting(char** argv, void* mem, u32 len, u8 fault) {
   u8  keeping = 0, res;
   u8  reach_two_locs = 0;
 
+  // check if fix location and crash location were reached
+  u8 marker_content = *marker_base;
+  reach_two_locs = marker_content >> 7;
+  reach_two_locs &= ((marker_content << 1) >> 7);
+  memset(marker_base, 0, 1);
+
   if (fault == crash_mode) {
 
     hnb = has_new_bits(virgin_bits);
@@ -3224,12 +3230,6 @@ static u8 save_if_interesting(char** argv, void* mem, u32 len, u8 fault) {
     }
   }
 
-  // check if fix location and crash location were reached
-  u8 marker_content = *marker_base;
-  reach_two_locs = marker_content >> 7;
-  reach_two_locs &= ((marker_content << 1) >> 7);
-  memset(marker_base, 0, 1);
-  
   switch (fault) {
 
     case FAULT_TMOUT:
@@ -3320,6 +3320,12 @@ keep_as_crash:
       }
 
       if (!reach_two_locs) return keeping;
+
+      hnb = has_new_bits(virgin_crash);
+
+      // if no new bits, throw it away 98% of the time
+      if (!hnb && UR(100) > 1) return keeping;
+
       kept_crashes++;
 
       if (!unique_crashes) write_crash_readme();
@@ -3335,7 +3341,7 @@ keep_as_crash:
                         kill_signal);
 
 #endif /* ^!SIMPLE_FILES */
-      if (has_new_bits(virgin_crash)) {
+      if (hnb) {
         unique_crashes++;
 
         last_crash_time = get_cur_time();
