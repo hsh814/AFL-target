@@ -3331,7 +3331,7 @@ keep_as_crash:
 
       kept_crashes++;
 
-      if (!unique_crashes) write_crash_readme();
+      // if (!unique_crashes) write_crash_readme();
 
 #ifndef SIMPLE_FILES
 
