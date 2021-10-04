@@ -304,6 +304,10 @@
 
 #define MSAN_ERROR          86
 
+/* Distinctive exit code used to indicate UBSAN trap condition: */
+
+#define UBSAN_ERORR         87
+
 /* Designated file descriptors for forkserver commands (the application will
    use FORKSRV_FD and FORKSRV_FD + 1): */
 

@@ -123,6 +123,7 @@ EXP_ST u8  skip_deterministic,        /* Skip deterministic stages?       */
            not_on_tty,                /* stdout is not a tty              */
            term_too_small,            /* terminal dimensions too small    */
            uses_asan,                 /* Target uses ASAN?                */
+           uses_ubsan,                /* Target uses UBSAN?               */
            no_forkserver,             /* Disable forkserver?              */
            crash_mode,                /* Crash mode! Yeah!                */
            in_place_resume,           /* Attempt in-place resume?         */
@@ -2128,6 +2129,10 @@ EXP_ST void init_forkserver(char** argv) {
                            "allocator_may_return_null=1:"
                            "msan_track_origins=0", 0);
 
+    setenv("UBSAN_OPTIONS", "halt_on_error=1:"
+                            "exitcode=" STRINGIFY(UBSAN_ERORR) ":"
+                            "symbolize=0", 0);
+
     execv(target_path, argv);
 
     /* Use a distinctive bitmap signature to tell the parent about execv()
@@ -2391,6 +2396,10 @@ static u8 run_target(char** argv, u32 timeout) {
                              "symbolize=0:"
                              "msan_track_origins=0", 0);
 
+      setenv("UBSAN_OPTIONS", "halt_on_error=1:"
+                              "exitcode=" STRINGIFY(UBSAN_ERORR) ":"
+                              "symbolize=0", 0);
+
       execv(target_path, argv);
 
       /* Use a distinctive bitmap value to tell the parent about execv()
@@ -2497,6 +2506,11 @@ static u8 run_target(char** argv, u32 timeout) {
      must use a special exit code. */
 
   if (uses_asan && WEXITSTATUS(status) == MSAN_ERROR) {
+    kill_signal = 0;
+    return FAULT_CRASH;
+  }
+
+  if (uses_ubsan && WEXITSTATUS(status) == UBSAN_ERORR) {
     kill_signal = 0;
     return FAULT_CRASH;
   }
@@ -7041,6 +7055,8 @@ EXP_ST void check_binary(u8* fname) {
 
   if (memmem(f_data, f_len, "libasan.so", 10) ||
       memmem(f_data, f_len, "__msan_init", 11)) uses_asan = 1;
+
+  if (memmem(f_data, f_len, "libubsan.so", 11)) uses_ubsan = 1;
 
   /* Detect persistent & deferred init signatures in the binary. */
 
