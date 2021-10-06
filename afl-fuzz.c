@@ -3347,17 +3347,9 @@ keep_as_crash:
 
       // if (!unique_crashes) write_crash_readme();
 
-#ifndef SIMPLE_FILES
-
-      fn = alloc_printf("%s/crashes/id:%06llu,sig:%02u,%s", out_dir,
-                        kept_crashes, kill_signal, describe_op(0));
-
-#else
-
       fn = alloc_printf("%s/crashes/id_%06llu_%02u", out_dir, kept_crashes,
                         kill_signal);
 
-#endif /* ^!SIMPLE_FILES */
       if (hnb) {
         unique_crashes++;
 
@@ -3373,7 +3365,7 @@ keep_as_crash:
       // if no new bits, and have already saved enough passes, throw this away
       if (!hnb && kept_normals >= PASS_WANTED) return keeping;
       kept_normals++;
-      fn = alloc_printf("%s/normals/id:%06llu", out_dir, kept_normals);
+      fn = alloc_printf("%s/normals/id_%06llu", out_dir, kept_normals);
       break;
 
     case FAULT_ERROR: FATAL("Unable to execute target application");
