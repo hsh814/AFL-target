@@ -3204,9 +3204,9 @@ static u8 save_if_interesting(char** argv, void* mem, u32 len, u8 fault) {
 
   hnb = has_new_bits(virgin_bits);
 
-  if (fault == crash_mode) {
+  if (fault == crash_mode || fault == FAULT_NONE) {
 
-    if (hnb) {
+    if (hnb || reach_two_locs) {
 
 #ifndef SIMPLE_FILES
 
