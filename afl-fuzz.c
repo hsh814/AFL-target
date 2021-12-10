@@ -3190,6 +3190,11 @@ static void write_crash_readme(void) {
 
 static u8 save_if_interesting(char** argv, void* mem, u32 len, u8 fault) {
 
+  if (kept_crashes >= FAIL_WANTED && kept_normals >= PASS_WANTED) {
+    // we have saved enough tests, abort AFL now
+    ABORT("Have saved enough test cases. Abort early.");
+  }
+
   u8  *fn = "";
   u8  hnb;
   s32 fd;

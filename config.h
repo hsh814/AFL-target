@@ -88,8 +88,8 @@
 
 /* Desired number of pass and fail test to save: */
 
-#define PASS_WANTED         10000
-#define FAIL_WANTED         10000
+#define PASS_WANTED         2000
+#define FAIL_WANTED         2000
 
 /* Baseline number of random tweaks during a single 'havoc' stage: */
 
