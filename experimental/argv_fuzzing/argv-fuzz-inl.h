@@ -51,6 +51,32 @@
     if (!argc) argc = 1; \
   } while (0)
 
+#define AFL_INIT_SET02(_p, _two) do { \
+    argv = afl_init_argv(&argc); \
+    argv[0] = (_p); \
+    argv[2] = (_two); \
+    argc = 3; \
+    argv[argc] = NULL; \
+  } while (0)
+
+#define AFL_INIT_SET0234(_p, _two, _three, _four) do { \
+    argv[0] = (_p); \
+    argv[1] = afl_init_single_argv(); \
+    argv[2] = (_two); \
+    argv[3] = (_three); \
+    argv[4] = (_four); \
+    argc = 5; \
+    argv[argc] = NULL; \
+  } while (0)
+
+#define AFL_INIT_SET03(_p, _three) do { \
+    argv = afl_init_argv(&argc); \
+    argv[0] = (_p); \
+    argv[3] = (_three); \
+    argc = 4; \
+    argv[argc] = NULL; \
+  } while (0)
+
 #define MAX_CMDLINE_LEN 100000
 #define MAX_CMDLINE_PAR 1000
 
@@ -83,6 +109,22 @@ static char** afl_init_argv(int* argc) {
 
   return ret;
 
+}
+
+/**
+ * Init a single argv, all chars including spaces are considered as one arg.
+ **/
+static char* afl_init_single_argv(void) {
+  static char in_buf[MAX_CMDLINE_LEN];
+  static char* ret;
+  if (read(0, in_buf, MAX_CMDLINE_LEN - 2) < 0);
+
+  char *ptr = in_buf;
+  ret = ptr;
+  while(*ptr) ptr++;
+  *ptr = '\0';
+
+  return ret;
 }
 
 #undef MAX_CMDLINE_LEN
