@@ -52,8 +52,8 @@
   } while (0)
 
 #define AFL_INIT_SET02(_p, _two) do { \
-    argv = afl_init_argv(&argc); \
     argv[0] = (_p); \
+    argv[1] = afl_init_single_argv_before_space(); \
     argv[2] = (_two); \
     argc = 3; \
     argv[argc] = NULL; \
@@ -70,8 +70,8 @@
   } while (0)
 
 #define AFL_INIT_SET03(_p, _three) do { \
-    argv = afl_init_argv(&argc); \
     argv[0] = (_p); \
+    argv[1] = afl_init_argv(&argc); \
     argv[3] = (_three); \
     argc = 4; \
     argv[argc] = NULL; \
@@ -122,6 +122,19 @@ static char* afl_init_single_argv(void) {
   char *ptr = in_buf;
   ret = ptr;
   while(*ptr) ptr++;
+  *ptr = '\0';
+
+  return ret;
+}
+
+static char* afl_init_single_argv_before_space(void) {
+  static char in_buf[MAX_CMDLINE_LEN];
+  static char* ret;
+  if (read(0, in_buf, MAX_CMDLINE_LEN - 2) < 0);
+
+  char *ptr = in_buf;
+  ret = ptr;
+  while (*ptr && !isspace(*ptr)) ptr++;
   *ptr = '\0';
 
   return ret;
