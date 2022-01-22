@@ -71,7 +71,9 @@
 
 #define AFL_INIT_SET03(_p, _three) do { \
     argv[0] = (_p); \
-    argv[1] = afl_init_argv(&argc); \
+    char **ret = afl_init_two_argv(); \
+    argv[1] = ret[0]; \
+    argv[2] = ret[1]; \
     argv[3] = (_three); \
     argc = 4; \
     argv[argc] = NULL; \
@@ -127,6 +129,9 @@ static char* afl_init_single_argv(void) {
   return ret;
 }
 
+/**
+ * Takes one single argv before space from stdin.
+ **/
 static char* afl_init_single_argv_before_space(void) {
   static char in_buf[MAX_CMDLINE_LEN];
   static char* ret;
@@ -134,6 +139,28 @@ static char* afl_init_single_argv_before_space(void) {
 
   char *ptr = in_buf;
   ret = ptr;
+  while (*ptr && !isspace(*ptr)) ptr++;
+  *ptr = '\0';
+
+  return ret;
+}
+
+/**
+ * Takes two space-seprated argv from stdin.
+ **/
+static char** afl_init_two_argv(void) {
+  static char in_buf[MAX_CMDLINE_LEN];
+  static char* ret[2];
+  if (read(0, in_buf, MAX_CMDLINE_LEN - 2) < 0);
+
+  char *ptr = in_buf;
+  ret[0] = ptr;
+  while (*ptr && !isspace(*ptr)) ptr++;
+  *ptr = '\0';
+  ptr++;
+  // skip space between two args
+  while (*ptr && isspace(*ptr)) ptr++;
+  ret[1] = ptr;
   while (*ptr && !isspace(*ptr)) ptr++;
   *ptr = '\0';
 
