@@ -69,14 +69,13 @@
     argv[argc] = NULL; \
   } while (0)
 
-#define AFL_INIT_SET034(_p, _three, _four) do { \
+#define AFL_INIT_SET03(_p, _three) do { \
     argv[0] = (_p); \
     char **ret = afl_init_two_argv(); \
     argv[1] = ret[0]; \
     argv[2] = ret[1]; \
     argv[3] = (_three); \
-    argv[4] = (_four); \
-    argc = 5; \
+    argc = 4; \
     argv[argc] = NULL; \
   } while (0)
 
