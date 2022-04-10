@@ -89,7 +89,7 @@
 /* Desired number of pass and fail test to save: */
 
 #define PASS_WANTED         5000
-#define FAIL_WANTED         2000
+#define FAIL_WANTED         5000
 
 /* Baseline number of random tweaks during a single 'havoc' stage: */
 
@@ -106,7 +106,7 @@
 #define HAVOC_MIN           16
 
 /* Maximum stacking for havoc-stage tweaks. The actual value is calculated
-   like this: 
+   like this:
 
    n = random between 1 and HAVOC_STACK_POW2
    stacking = 2^n
