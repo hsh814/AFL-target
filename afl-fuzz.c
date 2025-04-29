@@ -151,6 +151,8 @@ static s32 forksrv_pid,               /* PID of the fork server           */
 
 EXP_ST u8* trace_bits;                /* SHM with instrumentation bitmap  */
 
+static u8 *afl_pacfix_target_reached;
+
 EXP_ST u8  virgin_bits[MAP_SIZE],     /* Regions yet untouched by fuzzing */
            virgin_tmout[MAP_SIZE],    /* Bits we haven't seen in tmouts   */
            virgin_crash[MAP_SIZE];    /* Bits we haven't seen in crashes  */
@@ -158,6 +160,10 @@ EXP_ST u8  virgin_bits[MAP_SIZE],     /* Regions yet untouched by fuzzing */
 static u8  var_bytes[MAP_SIZE];       /* Bytes that appear to be variable */
 
 static s32 shm_id;                    /* ID of the SHM region             */
+
+static s32 shm_id_pacfix;
+
+static u64 total_saved = 0;
 
 static s32 marker_shm_id;             /* ID of the marker SHM region      */
 EXP_ST u8* marker_base;               /* Base addr of the marker region   */
@@ -1238,6 +1244,7 @@ static void remove_shm(void) {
 
   shmctl(shm_id, IPC_RMID, NULL);
   shmctl(marker_shm_id, IPC_RMID, NULL);
+  shmctl(shm_id_pacfix, IPC_RMID, NULL);
 
 }
 
@@ -1388,13 +1395,15 @@ EXP_ST void setup_shm(void) {
 
   shm_id = shmget(IPC_PRIVATE, MAP_SIZE, IPC_CREAT | IPC_EXCL | 0600);
   marker_shm_id = shmget(IPC_PRIVATE, 4096, IPC_CREAT | IPC_EXCL | 0600);
+  shm_id_pacfix = shmget(IPC_PRIVATE, 16, IPC_CREAT | IPC_EXCL | 0600);
 
-  if (shm_id < 0 || marker_shm_id < 0) PFATAL("shmget() failed");
+  if (shm_id < 0 || marker_shm_id < 0 || shm_id_pacfix < 0) PFATAL("shmget() failed");
 
   atexit(remove_shm);
 
   shm_str = alloc_printf("%d", shm_id);
   marker_shm_str = alloc_printf("%d", marker_shm_id);
+  u8 *shm_str_pacfix = alloc_printf("%d", shm_id_pacfix);
 
   /* If somebody is asking us to fuzz instrumented binaries in dumb mode,
      we don't want them to detect instrumentation, since we won't be sending
@@ -1403,9 +1412,11 @@ EXP_ST void setup_shm(void) {
 
   if (!dumb_mode) setenv(SHM_ENV_VAR, shm_str, 1);
   if (!dumb_mode) setenv(MARKER_SHM_ENV_VAR, marker_shm_str, 1);
+  if (!dumb_mode) setenv(SHM_ENV_VAR_PACFIX, shm_str_pacfix, 1);
 
   ck_free(shm_str);
   ck_free(marker_shm_str);
+  ck_free(shm_str_pacfix);
 
   trace_bits = shmat(shm_id, NULL, 0);
 
@@ -1413,8 +1424,9 @@ EXP_ST void setup_shm(void) {
 
   marker_base = shmat(marker_shm_id, NULL, 0);
   memset(marker_base, 0, 1);
-}
 
+  afl_pacfix_target_reached = shmat(shm_id_pacfix, NULL, 0);
+}
 
 /* Load postprocessor, if available. */
 
@@ -2322,6 +2334,7 @@ static u8 run_target(char** argv, u32 timeout) {
      territory. */
 
   memset(trace_bits, 0, MAP_SIZE);
+  memset(afl_pacfix_target_reached, 0, 16);
   MEM_BARRIER();
 
   /* If we're running in "dumb" mode, we can't rely on the fork server
@@ -3190,10 +3203,10 @@ static void write_crash_readme(void) {
 
 static u8 save_if_interesting(char** argv, void* mem, u32 len, u8 fault) {
 
-  if (kept_crashes >= FAIL_WANTED && kept_normals >= PASS_WANTED) {
-    // we have saved enough tests, abort AFL now
-    ABORT("Have saved enough test cases. Abort early.");
-  }
+  // if (kept_crashes >= FAIL_WANTED && kept_normals >= PASS_WANTED) {
+  //   // we have saved enough tests, abort AFL now
+  //   ABORT("Have saved enough test cases. Abort early.");
+  // }
 
   u8  *fn = "";
   u8  hnb;
@@ -3207,11 +3220,24 @@ static u8 save_if_interesting(char** argv, void* mem, u32 len, u8 fault) {
   reach_two_locs &= ((marker_content << 1) >> 7);
   memset(marker_base, 0, 1);
 
+  if (fault == FAULT_NONE || fault == FAULT_CRASH) {
+    if (*afl_pacfix_target_reached) {
+      total_saved++;
+      ACTF("Reached target loc %lld %d %lld", total_saved, fault, get_cur_time() - start_time);
+      u8 *save_fn = alloc_printf("%s/seeds/%lld_%s_%lld", out_dir, total_saved, fault == FAULT_NONE ? "pos" : "neg", get_cur_time() - start_time);
+      int   fd = open(save_fn, O_WRONLY | O_CREAT | O_EXCL, 0600);
+      if (unlikely(fd < 0)) { PFATAL("Unable to create '%s'", save_fn); }
+      ck_write(fd, mem, len, save_fn);
+      close(fd);
+      ck_free(save_fn);
+    }
+  }
+
   hnb = has_new_bits(virgin_bits);
 
   if (fault == crash_mode || fault == FAULT_NONE) {
 
-    if (hnb || (reach_two_locs && UR(100) <= 1)) {
+    if (hnb) {
 
 #ifndef SIMPLE_FILES
 
@@ -3856,6 +3882,10 @@ static void maybe_delete_out_dir(void) {
 
   fn = alloc_printf("%s/queue", out_dir);
   if (delete_files(fn, CASE_PREFIX)) goto dir_cleanup_failed;
+  ck_free(fn);
+
+  fn = alloc_printf("%s/seeds", out_dir);
+  if (delete_files(fn, NULL)) goto dir_cleanup_failed;
   ck_free(fn);
 
   /* All right, let's do <out_dir>/crashes/id:* and <out_dir>/hangs/id:*. */
@@ -7290,6 +7320,9 @@ EXP_ST void setup_dirs_fds(void) {
   if (mkdir(tmp, 0700)) PFATAL("Unable to create '%s'", tmp);
   ck_free(tmp);
 
+  tmp = alloc_printf("%s/seeds", out_dir);
+  if (mkdir(tmp, 0700)) PFATAL("Unable to create '%s'", tmp);
+  ck_free(tmp);
 
   /* All recorded normales. */
 

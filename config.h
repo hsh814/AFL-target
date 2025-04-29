@@ -283,6 +283,7 @@
 
 #define SHM_ENV_VAR         "__AFL_SHM_ID"
 #define MARKER_SHM_ENV_VAR  "__AFL_MARKER_SHM_ID"
+#define SHM_ENV_VAR_PACFIX  "__AFL_SHM_ID_PACFIX"
 
 /* Other less interesting, internal-only variables. */
 

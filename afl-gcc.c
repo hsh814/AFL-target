@@ -56,14 +56,14 @@ static u8** cc_params;              /* Parameters passed to the real CC  */
 static u32  cc_par_cnt = 1;         /* Param count, including argv0      */
 static u8   be_quiet,               /* Quiet mode                        */
             clang_mode;             /* Invoked as afl-clang*?            */
-
+static u8 * afl_path;
 
 /* Try to find our "fake" GNU assembler in AFL_PATH or at the location derived
    from argv[0]. If that fails, abort. */
 
 static void find_as(u8* argv0) {
 
-  u8 *afl_path = getenv("AFL_PATH");
+  afl_path = getenv("AFL_PATH");
   u8 *slash, *tmp;
 
   if (afl_path) {
@@ -88,6 +88,7 @@ static void find_as(u8* argv0) {
 
     *slash = 0;
     dir = ck_strdup(argv0);
+    afl_path = ck_strdup(dir);
     *slash = '/';
 
     tmp = alloc_printf("%s/afl-as", dir);
@@ -299,9 +300,14 @@ static void edit_params(u32 argc, char** argv) {
     cc_params[cc_par_cnt++] = "-fno-builtin-strcasestr";
 
   }
+  
+  cc_params[cc_par_cnt++] = "-D__AFL_PACFIX()=void __afl_pacfix_mark_target_reached();";
+  cc_params[cc_par_cnt++] =
+      "-D__AFL_PACFIX_MARK_TARGET_REACHED()=__afl_pacfix_mark_target_reached()";
+
+  // fprintf(stderr, "option %s %s %s\n", cc_params[cc_par_cnt - 3], cc_params[cc_par_cnt - 2], cc_params[cc_par_cnt - 1]);
 
   cc_params[cc_par_cnt] = NULL;
-
 }
 
 

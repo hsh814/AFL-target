@@ -303,6 +303,12 @@ static void edit_params(u32 argc, char** argv) {
   }
 #endif
 
+  cc_params[cc_par_cnt++] = "-D__AFL_PACFIX()=void __afl_pacfix_mark_target_reached();";
+  cc_params[cc_par_cnt++] = "-D__AFL_PACFIX_MARK_TARGET_REACHED()=__afl_pacfix_mark_target_reached()";
+
+  // fprintf(stderr, "afl_clang_fast %s %s %s\n", cc_params[cc_par_cnt - 3], cc_params[cc_par_cnt - 2], cc_params[cc_par_cnt - 1]);
+
+
   cc_params[cc_par_cnt] = NULL;
 
 }

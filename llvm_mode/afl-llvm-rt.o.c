@@ -59,6 +59,7 @@
 
 u8  __afl_area_initial[MAP_SIZE];
 u8* __afl_area_ptr = __afl_area_initial;
+static u8 *__afl_pacfix_target_reached_ptr = __afl_area_initial;
 
 __thread u32 __afl_prev_loc;
 
@@ -73,6 +74,7 @@ static u8 is_persistent;
 static void __afl_map_shm(void) {
 
   u8 *id_str = getenv(SHM_ENV_VAR);
+  u8 *id_str_pacfix = getenv(SHM_ENV_VAR_PACFIX);
 
   /* If we're running under AFL, attach to the appropriate region, replacing the
      early-stage __afl_area_initial region that is needed to allow some really
@@ -95,6 +97,32 @@ static void __afl_map_shm(void) {
 
   }
 
+  if (id_str_pacfix) {
+
+    u32 shm_id = atoi(id_str_pacfix);
+
+    __afl_pacfix_target_reached_ptr =
+        (u8 *)shmat(shm_id, NULL, 0);
+
+    /* Whooooops. */
+
+    if (!__afl_pacfix_target_reached_ptr ||
+        __afl_pacfix_target_reached_ptr == (void *)-1) {
+        
+      _exit(1);
+
+    }
+  }
+
+}
+
+void __afl_pacfix_mark_target_reached() {
+  
+  if (__afl_pacfix_target_reached_ptr) {
+
+    *__afl_pacfix_target_reached_ptr = 1;
+
+  }
 }
 
 
