@@ -42,6 +42,7 @@
 
 #include <unistd.h>
 #include <ctype.h>
+#include <stdlib.h>
 
 #define AFL_INIT_ARGV() do { argv = afl_init_argv(&argc); } while (0)
 
@@ -52,31 +53,37 @@
   } while (0)
 
 #define AFL_INIT_SET02(_p, _two) do { \
-    argv[0] = (_p); \
-    argv[1] = afl_init_single_argv_before_space(); \
-    argv[2] = (_two); \
+    char **new_argv = malloc(sizeof(char*) * 4); \
+    new_argv[0] = (_p); \
+    new_argv[1] = afl_init_single_argv_before_space(); \
+    new_argv[2] = (_two); \
     argc = 3; \
-    argv[argc] = NULL; \
+    new_argv[argc] = NULL; \
+    argv = new_argv; \
   } while (0)
 
 #define AFL_INIT_SET0234(_p, _two, _three, _four) do { \
-    argv[0] = (_p); \
-    argv[1] = afl_init_single_argv(); \
-    argv[2] = (_two); \
-    argv[3] = (_three); \
-    argv[4] = (_four); \
+    char **new_argv = malloc(sizeof(char*) * 6); \
+    new_argv[0] = (_p); \
+    new_argv[1] = afl_init_single_argv(); \
+    new_argv[2] = (_two); \
+    new_argv[3] = (_three); \
+    new_argv[4] = (_four); \
     argc = 5; \
-    argv[argc] = NULL; \
+    new_argv[argc] = NULL; \
+    argv = new_argv; \
   } while (0)
 
 #define AFL_INIT_SET03(_p, _three) do { \
-    argv[0] = (_p); \
+    char **new_argv = malloc(sizeof(char*) * 5); \
+    new_argv[0] = (_p); \
     char **ret = afl_init_two_argv(); \
-    argv[1] = ret[0]; \
-    argv[2] = ret[1]; \
-    argv[3] = (_three); \
+    new_argv[1] = ret[0]; \
+    new_argv[2] = ret[1]; \
+    new_argv[3] = (_three); \
     argc = 4; \
-    argv[argc] = NULL; \
+    new_argv[argc] = NULL; \
+    argv = new_argv; \
   } while (0)
 
 #define MAX_CMDLINE_LEN 100000
@@ -122,6 +129,7 @@ static char* afl_init_single_argv(void) {
   if (read(0, in_buf, MAX_CMDLINE_LEN - 2) < 0);
 
   char *ptr = in_buf;
+  while (*ptr && isspace(*ptr)) ptr++;
   ret = ptr;
   while(*ptr) ptr++;
   *ptr = '\0';
