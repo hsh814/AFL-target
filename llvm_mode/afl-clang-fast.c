@@ -111,12 +111,16 @@ static void edit_params(u32 argc, char** argv) {
   name = strrchr(argv[0], '/');
   if (!name) name = argv[0]; else name++;
 
+  u8 plusplus_mode = 0;
+
   if (!strcmp(name, "afl-clang-fast++")) {
     u8* alt_cxx = getenv("AFL_CXX");
     cc_params[0] = alt_cxx ? alt_cxx : (u8*)"clang++";
+    plusplus_mode = 1;
   } else {
     u8* alt_cc = getenv("AFL_CC");
     cc_params[0] = alt_cc ? alt_cc : (u8*)"clang";
+    plusplus_mode = 0;
   }
 
   /* There are two ways to compile afl-clang-fast. In the traditional mode, we
@@ -303,7 +307,11 @@ static void edit_params(u32 argc, char** argv) {
   }
 #endif
 
-  cc_params[cc_par_cnt++] = "-D__AFL_PACFIX()=void __afl_pacfix_mark_target_reached();";
+  if (plusplus_mode) {
+    cc_params[cc_par_cnt++] = "-D__AFL_PACFIX()=extern \"C\" void __afl_pacfix_mark_target_reached();";
+  } else {
+    cc_params[cc_par_cnt++] = "-D__AFL_PACFIX()=void __afl_pacfix_mark_target_reached();";
+  }
   cc_params[cc_par_cnt++] = "-D__AFL_PACFIX_MARK_TARGET_REACHED()=__afl_pacfix_mark_target_reached()";
 
   // fprintf(stderr, "afl_clang_fast %s %s %s\n", cc_params[cc_par_cnt - 3], cc_params[cc_par_cnt - 2], cc_params[cc_par_cnt - 1]);
