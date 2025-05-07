@@ -3220,20 +3220,26 @@ static u8 save_if_interesting(char** argv, void* mem, u32 len, u8 fault) {
   reach_two_locs &= ((marker_content << 1) >> 7);
   memset(marker_base, 0, 1);
 
+  hnb = has_new_bits(virgin_bits);
+
   if (fault == FAULT_NONE || fault == FAULT_CRASH) {
     if (*afl_pacfix_target_reached) {
-      total_saved++;
-      ACTF("Reached target loc %lld %d %lld", total_saved, fault, get_cur_time() - start_time);
-      u8 *save_fn = alloc_printf("%s/seeds/%lld_%s_%lld", out_dir, total_saved, fault == FAULT_NONE ? "pos" : "neg", get_cur_time() - start_time);
-      int   fd = open(save_fn, O_WRONLY | O_CREAT | O_EXCL, 0600);
-      if (unlikely(fd < 0)) { PFATAL("Unable to create '%s'", save_fn); }
-      ck_write(fd, mem, len, save_fn);
-      close(fd);
-      ck_free(save_fn);
+      u8 keep = 1;
+      if (total_saved > 2000000) {
+        keep = hnb;
+      }
+      if (keep) {
+        total_saved++;
+        ACTF("Reached target loc %lld %d %lld", total_saved, fault, get_cur_time() - start_time);
+        u8 *save_fn = alloc_printf("%s/seeds/%lld_%s_%lld", out_dir, total_saved, fault == FAULT_NONE ? "pos" : "neg", get_cur_time() - start_time);
+        int   fd = open(save_fn, O_WRONLY | O_CREAT | O_EXCL, 0600);
+        if (unlikely(fd < 0)) { PFATAL("Unable to create '%s'", save_fn); }
+        ck_write(fd, mem, len, save_fn);
+        close(fd);
+        ck_free(save_fn);
+      }
     }
   }
-
-  hnb = has_new_bits(virgin_bits);
 
   if (fault == crash_mode || fault == FAULT_NONE) {
 
